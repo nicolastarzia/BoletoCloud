@@ -7,7 +7,7 @@ namespace BoletoCloud.Entities
         public bool? Aceite { get; set; }
         public string Titulo { get; set; }
         public string Documento { get; set; }
-        public string NumeroNIB { get; set; }
+        public string Numero { get; set; }
         public string Sequencial { get; set; }
         public string Instrucao { get; set; }
         public DateTime? Emissao { get; set; }

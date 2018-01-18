@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 
 namespace BoletoCloud
 {
@@ -10,6 +11,6 @@ namespace BoletoCloud
         public string Token { get; set; }
         public string Version { get; set; }
         public Stream PDF { get; set; }
-        public Entities.Error Error { get; set; }
+        public Entities.Error Erro { get; set; }
     }
 }

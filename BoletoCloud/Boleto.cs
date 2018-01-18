@@ -5,12 +5,19 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
+using System.Globalization;
 
 namespace BoletoCloud
 {
     public class Boleto
     {
-        private const string MODULO_BOLETOCLOUD = "/boletos/";
+        private const string MODULO_BOLETOCLOUD = "/boletos";
+
+        
+
 
         private void ApiKeyFoiPreenchida()
         {
@@ -23,8 +30,9 @@ namespace BoletoCloud
             var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD);
 
             Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
-                string boletoJSON = JsonConvert.SerializeObject(boleto);
-                var response = await client.PostAsync(TARGETURL, new StringContent(boletoJSON));
+                var boletoKeys = boleto.ToKeyValue();
+
+                var response = await client.PostAsync(TARGETURL, new FormUrlEncodedContent(boletoKeys));
                 return response;
             };
 
@@ -33,7 +41,7 @@ namespace BoletoCloud
 
         public async Task<Resultado> Buscar(string token)
         {
-            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD, token);
+            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD,"/", token);
 
             Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
                 var response = await client.GetAsync(TARGETURL);
@@ -71,10 +79,11 @@ namespace BoletoCloud
 
             // ... LOGIN
             var byteArray = Encoding.ASCII.GetBytes($"{Config.APIKey}:token");
-            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
             // ... LOGIN
 
             // .. REQUEST
+            
             HttpResponseMessage response = await acao(client);
             // .. REQUEST
 
@@ -94,23 +103,35 @@ namespace BoletoCloud
             var Resultado = new Resultado();
             var pdfFile = await response.Content.ReadAsStreamAsync();
             Resultado.PDF = pdfFile;
-            Resultado.Token = response.Headers.GetValues("X-BoletoCloud-Token").FirstOrDefault();
-            Resultado.ContentType = response.Headers.GetValues("Content-Type").FirstOrDefault();
-            Resultado.Location = response.Headers.GetValues("Location").FirstOrDefault();
-            Resultado.Version = response.Headers.GetValues("X-BoletoCloud-Version").FirstOrDefault();
-
+            PreencherCabecalho(response, Resultado);
             return Resultado;
         }
 
         private async Task<Resultado> FillErrorResponse(HttpResponseMessage response)
         {
-            var Resultado = new Resultado();
             var strCorpo = await response.Content.ReadAsStringAsync();
-            Entities.Error err = JsonConvert.DeserializeObject<Entities.Error>(strCorpo);
-            Resultado.Error = err;
-            Resultado.StatusCode = response.StatusCode.ToString();
-            Resultado.ContentType = response.Headers.GetValues("Content-Type").FirstOrDefault();
+            Resultado Resultado = JsonConvert.DeserializeObject<Resultado>(strCorpo);
+            PreencherCabecalho(response, Resultado);
             return Resultado;
+        }
+
+        private void PreencherCabecalho(HttpResponseMessage response, Resultado Resultado)
+        {
+            IEnumerable<string> valores;
+            Resultado.StatusCode = response.StatusCode.ToString();
+            response.Headers.TryGetValues("X-BoletoCloud-Token", out valores);
+            if (valores != null)
+                Resultado.Token = valores.FirstOrDefault();
+            response.Headers.TryGetValues("Content-Type", out valores);
+            if (valores != null)
+                Resultado.ContentType = valores.FirstOrDefault();
+            response.Headers.TryGetValues("Location", out valores);
+            if (valores != null)
+                Resultado.Location = valores.FirstOrDefault();
+            response.Headers.TryGetValues("X-BoletoCloud-Version", out valores);
+            if (valores != null)
+                Resultado.Version = valores.FirstOrDefault();
+
         }
     }
 }
