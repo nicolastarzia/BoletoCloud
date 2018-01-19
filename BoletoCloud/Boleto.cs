@@ -24,26 +24,26 @@ namespace BoletoCloud
                 throw new ArgumentNullException("APIKey", "É obrigatório preencher o parametro APIKey");
         }
 
-        private async Task<Resultado> EnviarRequisicao(string TARGETURL, Func<HttpClient, Task<HttpResponseMessage>> acao)
+        private async Task<Resultado> EnviarRequisicao(Func<HttpClient, Task<HttpResponseMessage>> acao)
         {
             LancarErroSeApiKeyNaoFoiPreenchida();
-            HttpClient client = CriarObjetoHttpClient();
+            HttpClient clienteHttp = CriarObjetoHttpClient();
 
-            HttpResponseMessage response = await acao(client);
-            return await PreencherObjetoSucessoOuErro(response);
+            HttpResponseMessage mensagemResposta = await acao(clienteHttp);
+            return await PreencherObjetoSucessoOuErro(mensagemResposta);
         }
 
-        private async Task<Resultado> PreencherObjetoSucessoOuErro(HttpResponseMessage response)
+        private async Task<Resultado> PreencherObjetoSucessoOuErro(HttpResponseMessage mensagemRetorno)
         {
-            if (!response.IsSuccessStatusCode)
-                return await FillErrorResponse(response);
+            if (!mensagemRetorno.IsSuccessStatusCode)
+                return await PreencherErro(mensagemRetorno);
             else
-                return await FillSuccessResponse(response);
+                return await PreencherSucesso(mensagemRetorno);
         }
 
         private static HttpClient CriarObjetoHttpClient()
         {
-            HttpClient client;
+            HttpClient clienteHttp;
             if (!string.IsNullOrWhiteSpace(Config.UrlProxy))
             {
                 HttpClientHandler handler = new HttpClientHandler()
@@ -51,53 +51,52 @@ namespace BoletoCloud
                     Proxy = new WebProxy(Config.UrlProxy),
                     UseProxy = true,
                 };
-                client = new HttpClient(handler);
+                clienteHttp = new HttpClient(handler);
             }
             else
             {
-                client = new HttpClient();
+                clienteHttp = new HttpClient();
             }
 
-            var byteArray = Encoding.ASCII.GetBytes($"{Config.APIKey}:token");
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+            var senhaBase64 = Encoding.ASCII.GetBytes($"{Config.APIKey}:token");
+            clienteHttp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(senhaBase64));
 
-            return client;
+            return clienteHttp;
         }
 
-        private async Task<Resultado> FillSuccessResponse(HttpResponseMessage response)
+        private async Task<Resultado> PreencherSucesso(HttpResponseMessage mensagemResposta)
         {
             var Resultado = new Resultado();
-            var pdfFile = await response.Content.ReadAsStreamAsync();
-            Resultado.PDF = pdfFile;
-            PreencherCabecalho(response, Resultado);
+            var arquivoPDF = await mensagemResposta.Content.ReadAsStreamAsync();
+            Resultado.PDF = arquivoPDF;
+            PreencherCabecalho(mensagemResposta, Resultado);
             return Resultado;
         }
 
-        private async Task<Resultado> FillErrorResponse(HttpResponseMessage response)
+        private async Task<Resultado> PreencherErro(HttpResponseMessage mensagemResposta)
         {
-            var strCorpo = await response.Content.ReadAsStringAsync();
+            var strCorpo = await mensagemResposta.Content.ReadAsStringAsync();
             Resultado Resultado = JsonConvert.DeserializeObject<Resultado>(strCorpo);
-            PreencherCabecalho(response, Resultado);
+            PreencherCabecalho(mensagemResposta, Resultado);
             return Resultado;
         }
 
-        private void PreencherCabecalho(HttpResponseMessage response, Resultado Resultado)
+        private void PreencherCabecalho(HttpResponseMessage mensagemResposta, Resultado Resultado)
+        {
+            Resultado.StatusCode = mensagemResposta.StatusCode.ToString();
+            Resultado.Token = PreencherValorCabecalho(mensagemResposta, "X-BoletoCloud-Token");
+            Resultado.ContentType = PreencherValorCabecalho(mensagemResposta, "Content-Type");
+            Resultado.Location = PreencherValorCabecalho(mensagemResposta, "Location");
+            Resultado.Version = PreencherValorCabecalho(mensagemResposta, "X-BoletoCloud-Version");
+        }
+
+        private string PreencherValorCabecalho(HttpResponseMessage mensagemResposta, string chave)
         {
             IEnumerable<string> valores;
-            Resultado.StatusCode = response.StatusCode.ToString();
-            response.Headers.TryGetValues("X-BoletoCloud-Token", out valores);
+            mensagemResposta.Headers.TryGetValues(chave, out valores);
             if (valores != null)
-                Resultado.Token = valores.FirstOrDefault();
-            response.Headers.TryGetValues("Content-Type", out valores);
-            if (valores != null)
-                Resultado.ContentType = valores.FirstOrDefault();
-            response.Headers.TryGetValues("Location", out valores);
-            if (valores != null)
-                Resultado.Location = valores.FirstOrDefault();
-            response.Headers.TryGetValues("X-BoletoCloud-Version", out valores);
-            if (valores != null)
-                Resultado.Version = valores.FirstOrDefault();
-
+                return valores.FirstOrDefault();
+            return "";
         }
         #endregion
 
@@ -111,16 +110,14 @@ namespace BoletoCloud
         /// <returns>Em caso de sucesso, retorna o PDF preenchido, caso de erro a variavel Erro é preenchida</returns>
         public async Task<Resultado> Criar(Entities.Boleto boleto)
         {
-            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD);
-
-            Func<HttpClient, Task<HttpResponseMessage>> criarBoleto = async (client) => {
-                var boletoKeys = boleto.ToKeyValue();
-
-                var response = await client.PostAsync(TARGETURL, new FormUrlEncodedContent(boletoKeys));
-                return response;
+            Func<HttpClient, Task<HttpResponseMessage>> criarBoleto = async (clienteHttp) => {
+                var boletoFormatoQueryString = boleto.ToKeyValue();
+                var URLDEFAULT = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD);
+                var mensagemResposta = await clienteHttp.PostAsync(URLDEFAULT, new FormUrlEncodedContent(boletoFormatoQueryString));
+                return mensagemResposta;
             };
 
-            return await EnviarRequisicao(TARGETURL, criarBoleto);
+            return await EnviarRequisicao(criarBoleto);
         }
 
         /// <summary>
@@ -133,14 +130,15 @@ namespace BoletoCloud
             if (string.IsNullOrWhiteSpace(token))
                 throw new ArgumentNullException("Token", "Preencher o parametro Token");
 
-            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD,"/", token);
+            
 
-            Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
-                var response = await client.GetAsync(TARGETURL);
-                return response;
+            Func<HttpClient, Task<HttpResponseMessage>> consultarBoleto = async (clienteHttp) => {
+                var URLDEFAULT = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD, "/", token);
+                var mensagemResposta = await clienteHttp.GetAsync(URLDEFAULT);
+                return mensagemResposta;
             };
 
-            return await EnviarRequisicao(TARGETURL, acao);
+            return await EnviarRequisicao(consultarBoleto);
         }
         #endregion
 
