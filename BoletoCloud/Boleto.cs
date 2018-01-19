@@ -10,55 +10,30 @@ using System.Collections.Generic;
 
 namespace BoletoCloud
 {
+    /// <summary>
+    /// Classe responsavel por conectar no servico BoletoCloud e efetuar todas as operações
+    /// </summary>
     public class Boleto
     {
+        #region Private
         private const string MODULO_BOLETOCLOUD = "/boletos";
 
-        private void ApiKeyFoiPreenchida()
+        private void LancarErroSeApiKeyNaoFoiPreenchida()
         {
             if (string.IsNullOrEmpty(Config.APIKey))
-                throw new System.ArgumentNullException("APIKey", "É obrigatório preencher o parametro APIKey");
-        }
-
-        public async Task<Resultado> Criar(Entities.Boleto boleto)
-        {
-            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD);
-
-            Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
-                var boletoKeys = boleto.ToKeyValue();
-
-                var response = await client.PostAsync(TARGETURL, new FormUrlEncodedContent(boletoKeys));
-                return response;
-            };
-
-            return await EnviarRequisicao(TARGETURL, acao);
-        }
-
-        public async Task<Resultado> Buscar(string token)
-        {
-            if (string.IsNullOrWhiteSpace(token))
-                throw new ArgumentNullException("Token", "Preencher o parametro Token");
-
-            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD,"/", token);
-
-            Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
-                var response = await client.GetAsync(TARGETURL);
-                return response;
-            };
-
-            return await EnviarRequisicao(TARGETURL, acao);
+                throw new ArgumentNullException("APIKey", "É obrigatório preencher o parametro APIKey");
         }
 
         private async Task<Resultado> EnviarRequisicao(string TARGETURL, Func<HttpClient, Task<HttpResponseMessage>> acao)
         {
-            ApiKeyFoiPreenchida();
+            LancarErroSeApiKeyNaoFoiPreenchida();
             HttpClient client = CriarObjetoHttpClient();
 
             HttpResponseMessage response = await acao(client);
-            return await PreencherObjetoSucessoOuErro( response);
+            return await PreencherObjetoSucessoOuErro(response);
         }
 
-        private async Task<Resultado> PreencherObjetoSucessoOuErro( HttpResponseMessage response)
+        private async Task<Resultado> PreencherObjetoSucessoOuErro(HttpResponseMessage response)
         {
             if (!response.IsSuccessStatusCode)
                 return await FillErrorResponse(response);
@@ -124,5 +99,52 @@ namespace BoletoCloud
                 Resultado.Version = valores.FirstOrDefault();
 
         }
+        #endregion
+
+
+
+        #region Public
+        /// <summary>
+        /// Criar um novo boleto, através dos parametros enviados
+        /// </summary>
+        /// <param name="boleto">Classe boleto, necessaria para cadastrar o novo Boleto</param>
+        /// <returns>Em caso de sucesso, retorna o PDF preenchido, caso de erro a variavel Erro é preenchida</returns>
+        public async Task<Resultado> Criar(Entities.Boleto boleto)
+        {
+            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD);
+
+            Func<HttpClient, Task<HttpResponseMessage>> criarBoleto = async (client) => {
+                var boletoKeys = boleto.ToKeyValue();
+
+                var response = await client.PostAsync(TARGETURL, new FormUrlEncodedContent(boletoKeys));
+                return response;
+            };
+
+            return await EnviarRequisicao(TARGETURL, criarBoleto);
+        }
+
+        /// <summary>
+        /// Buscar o boleto através de um token existente
+        /// </summary>
+        /// <param name="token">Token do boleto gerado</param>
+        /// <returns>Em caso de sucesso, retorna o PDF preenchido, caso de erro a variavel Erro é preenchida</returns>
+        public async Task<Resultado> Buscar(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new ArgumentNullException("Token", "Preencher o parametro Token");
+
+            var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD,"/", token);
+
+            Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
+                var response = await client.GetAsync(TARGETURL);
+                return response;
+            };
+
+            return await EnviarRequisicao(TARGETURL, acao);
+        }
+        #endregion
+
+
+
     }
 }
