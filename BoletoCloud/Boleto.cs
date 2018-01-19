@@ -7,17 +7,12 @@ using Newtonsoft.Json;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
-using System.Globalization;
 
 namespace BoletoCloud
 {
     public class Boleto
     {
         private const string MODULO_BOLETOCLOUD = "/boletos";
-
-        
-
 
         private void ApiKeyFoiPreenchida()
         {
@@ -55,13 +50,9 @@ namespace BoletoCloud
         {
             Resultado result = null;
             HttpClient client = null;
-            // .. DECLARE
 
-            // .. VALIDATION
             ApiKeyFoiPreenchida();
-            // .. VALIDATION
 
-            // .. PROXY
             if (!string.IsNullOrWhiteSpace(Config.UrlProxy))
             {
                 HttpClientHandler handler = new HttpClientHandler()
@@ -75,27 +66,18 @@ namespace BoletoCloud
             {
                 client = new HttpClient();
             }
-            // .. PROXY
 
-            // ... LOGIN
             var byteArray = Encoding.ASCII.GetBytes($"{Config.APIKey}:token");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-            // ... LOGIN
-
-            // .. REQUEST
             
             HttpResponseMessage response = await acao(client);
-            // .. REQUEST
 
-
-            // .. RETURN
             if (!response.IsSuccessStatusCode)
                 result = await FillErrorResponse(response);
             else
                 result = await FillSuccessResponse(response);
 
             return result;
-            // .. RETURN
         }
 
         private async Task<Resultado> FillSuccessResponse(HttpResponseMessage response)
