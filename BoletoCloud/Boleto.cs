@@ -36,6 +36,9 @@ namespace BoletoCloud
 
         public async Task<Resultado> Buscar(string token)
         {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new ArgumentNullException("Token", "Preencher o parametro Token");
+
             var TARGETURL = string.Concat(ConfigURIS.URI(), MODULO_BOLETOCLOUD,"/", token);
 
             Func<HttpClient, Task<HttpResponseMessage>> acao = async (client) => {
