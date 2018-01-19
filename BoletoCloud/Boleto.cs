@@ -48,11 +48,24 @@ namespace BoletoCloud
 
         private async Task<Resultado> EnviarRequisicao(string TARGETURL, Func<HttpClient, Task<HttpResponseMessage>> acao)
         {
-            Resultado result = null;
-            HttpClient client = null;
-
             ApiKeyFoiPreenchida();
+            HttpClient client = CriarObjetoHttpClient();
 
+            HttpResponseMessage response = await acao(client);
+            return await PreencherObjetoSucessoOuErro( response);
+        }
+
+        private async Task<Resultado> PreencherObjetoSucessoOuErro( HttpResponseMessage response)
+        {
+            if (!response.IsSuccessStatusCode)
+                return await FillErrorResponse(response);
+            else
+                return await FillSuccessResponse(response);
+        }
+
+        private static HttpClient CriarObjetoHttpClient()
+        {
+            HttpClient client;
             if (!string.IsNullOrWhiteSpace(Config.UrlProxy))
             {
                 HttpClientHandler handler = new HttpClientHandler()
@@ -69,15 +82,8 @@ namespace BoletoCloud
 
             var byteArray = Encoding.ASCII.GetBytes($"{Config.APIKey}:token");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-            
-            HttpResponseMessage response = await acao(client);
 
-            if (!response.IsSuccessStatusCode)
-                result = await FillErrorResponse(response);
-            else
-                result = await FillSuccessResponse(response);
-
-            return result;
+            return client;
         }
 
         private async Task<Resultado> FillSuccessResponse(HttpResponseMessage response)
